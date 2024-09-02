@@ -279,7 +279,14 @@ Switch.toggle = function
 	self.draw self.hoverColor
 	wait 0.05
 	self.isOn = states[1]
-	self.draw self.hoverColor
+	if self.containsXY(mouse) then c = self.hoverColor else c = self.knobColor
+	self.draw c
+	self.action self.isOn
+end function
+
+Switch.set = function(newValue)
+	self.isOn = newValue
+	self.draw
 	self.action self.isOn
 end function
 
@@ -345,6 +352,12 @@ Slider.onDrag = function
 	end if
 end function
 
+Slider.set = function(newValue)
+	self.value = newValue
+	if self.containsXY(mouse) then c = self.hoverColor else c = self.knobColor
+	self.draw c
+	self.action newValue
+end function
 
 //----------------------------------------------------------------------
 
@@ -393,6 +406,13 @@ updateHook = function
 	events.eventLoop.doAfter 0.01, @updateHook
 end function
 
+runEventLoop = function(eventLoop = null)
+	if eventLoop == null then eventLoop = events.eventLoop
+	outer.eventLoop = eventLoop
+	updateHook
+	eventLoop.run
+end function
+
 demo = function
 	clear
 	textUtil.printAt 39, 23, "TextControl:"
@@ -427,9 +447,9 @@ demo = function
 		self.showMessage "Click!"
 	end function
 	
-	outer.btn = Button.make(60, 0, 8, "Exit")
-	btn.action = function; eventLoop.stop; text.row = 25; end function
-	btn.start
+	outer.quitBtn = Button.make(60, 0, 8, "Exit")
+	quitBtn.action = function; eventLoop.stop; text.row = 25; end function
+	quitBtn.start
 	
 	textUtil.printAt 12, 22, "Switch:"
 	outer.switch = Switch.make(20, 22)
@@ -442,8 +462,14 @@ demo = function
 	slider.maxValue = 10
 	slider.start
 	
-	updateHook
-	eventLoop.run
+	outer.btn = Button.make(29, 20, 7, "Reset")
+	btn.start
+	btn.action = function
+		switch.set false
+		slider.set 0
+	end function
+	
+	runEventLoop
 end function
 
 if locals == globals then demo
