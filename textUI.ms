@@ -48,11 +48,11 @@ TextArea.fromCol = 0
 TextArea.toCol = 67
 
 TextArea.make = function(fromCol, toCol, fromRow, toRow=null)
-	if toRow == null then toRow == fromRow
-	noob = new self
-	noob.fromCol = fromCol; noob.toCol = toCol
-	noob.fromRow = fromRow; noob.toRow = toRow
-	return noob
+	if toRow == null then toRow = fromRow
+	self = new self
+	self.fromCol = fromCol; self.toCol = toCol
+	self.fromRow = fromRow; self.toRow = toRow
+	return self
 end function
 
 TextArea.rowRange = function; return range(self.fromRow, self.toRow); end function
@@ -167,10 +167,10 @@ Button.caption = "   "
 Button.action = null  // Hook up your button action here!
 
 Button.make = function(column, row, width=12, caption="", action=null)
-	noob = super.make(column, column+width-1, row, row)
-	noob.caption = caption
-	if @action != null then noob.action = @action
-	return noob
+	self = super.make(column, column+width-1, row, row)
+	self.caption = caption
+	if @action != null then self.action = @action
+	return self
 end function
 
 Button.start = function
@@ -228,9 +228,9 @@ Switch.action = function(nowOn); end function
 Switch.isOn = 0  // any value from 0-1 is acceptable
 
 Switch.make = function(column, row, action=null)
-	noob = super.make(column, column+3, row, row)
-	if @action != null then noob.action = @action
-	return noob
+	self = super.make(column, column+3, row, row)
+	if @action != null then self.action = @action
+	return self
 end function
 
 Switch.start = function
@@ -305,9 +305,9 @@ Slider.minValue = 0
 Slider.maxValue = 1
 
 Slider.make = function(column, row, width=11, action=null)
-	noob = super.make(column, column+width-1, row, row)
-	if @action != null then noob.action = @action
-	return noob
+	self = super.make(column, column+width-1, row, row)
+	if @action != null then self.action = @action
+	return self
 end function
 
 Slider.start = function
@@ -358,6 +358,158 @@ Slider.set = function(newValue)
 	self.draw c
 	self.action newValue
 end function
+
+//----------------------------------------------------------------------
+// Meter: a non-interactive value meter (health, stamina, mana, etc.)
+Meter = new TextControl
+
+// Appearance
+Meter.fillColor = "#00CC00"
+Meter.textColor = color.white
+Meter.dimFactor = 0.35		// how much to dim background/caps
+
+// Value range
+Meter.minValue = 0
+Meter.maxValue = 100
+Meter.value = 0
+
+// Label
+Meter.label = ""
+Meter.showLabel = true			// label visibility toggle
+Meter.labelOnMeter = true		// allow label inside meter
+
+// Value display
+Meter.showPercent = false		// false = current/max, true = percentage
+
+Meter.centeredText = false		// Should text be centered on the meter?
+
+//----------------------------------------------------------------------
+// Create a new Meter
+Meter.make = function(column, row, width=12, label="")
+    self = super.make(column, column+width-1, row, row)
+    self.label = label
+    return self
+end function
+
+//----------------------------------------------------------------------
+// Start
+Meter.start = function
+    super.start
+    self.draw
+end function
+
+//----------------------------------------------------------------------
+// Draw the meter
+Meter.draw = function
+    saveColors
+    
+    // Normalize value
+    if self.maxValue == self.minValue then
+        t = 0
+    else
+        t = (self.value - self.minValue) / (self.maxValue - self.minValue)
+    end if
+    if t < 0 then t = 0
+    if t > 1 then t = 1
+    
+    x = self.fromCol
+    y = self.fromRow
+    
+    trackWidth = self.width - 2
+    fillCount = round(t * trackWidth)
+    
+    // Derived colors
+    bgColor = color.lerp(self.fillColor, color.black, self.dimFactor)
+    
+    leftCapColor  = bgColor
+    rightCapColor = bgColor
+    if self.value > self.minValue then leftCapColor = self.fillColor
+    if self.value >= self.maxValue then rightCapColor = self.fillColor
+    
+    // Compute value text
+    if self.showPercent then
+        pct = floor(100 * (self.value - self.minValue) / (self.maxValue - self.minValue))
+        valueText = pct + "%"
+    else
+        valueText = self.value + "/" + self.maxValue
+    end if
+    
+    // Length calculations
+    maxTextLen = str(self.maxValue).len
+	if self.showPercent then
+	    valueTextLen = valueText.len
+	else
+		valueTextLen = (maxTextLen * 2 + 1)
+	end if
+    labelLen = self.label.len
+    
+    // Decide label placement
+    labelFitsInside = self.showLabel and self.labelOnMeter and
+        (labelLen + 1 + valueTextLen <= trackWidth)
+    
+    drawLabelInside = labelFitsInside
+    drawLabelOutside = self.showLabel and not drawLabelInside
+    
+    // Outside label
+    if drawLabelOutside then
+        text.color = self.textColor
+        text.row = y
+        text.column = x - labelLen - 1
+        print self.label
+    end if
+    
+    // Left cap
+    setCell x, y, chars.buttonCapLeft, self.textColor, leftCapColor
+    
+    // Track
+    for i in range(0, trackWidth-1)
+        if i < fillCount then
+            setCell x+1+i, y, " ", text.backColor, self.fillColor
+        else
+            setCell x+1+i, y, " ", text.backColor, bgColor
+        end if
+    end for
+    
+    // Right cap
+    setCell self.toCol, y, chars.buttonCapRight, self.textColor, rightCapColor
+    
+    // Overlay text (label + value if inside)
+    if drawLabelInside then
+        overlayText = self.label + " " + valueText
+    else
+        overlayText = valueText
+    end if
+    
+	if self.centeredText then
+	    startCol = x + 1 + (trackWidth - overlayText.len) / 2
+	else
+		startCol = x + 1
+	end if
+    text.row = y
+    
+    for i in range(0, overlayText.len-1)
+        col = startCol + i
+        trackIdx = col - (x + 1)
+        
+        if 0 <= trackIdx < trackWidth and trackIdx < fillCount then
+            charBack = self.fillColor
+        else
+            charBack = bgColor
+        end if
+        
+        setCell col, y, overlayText[i], self.textColor, charBack
+    end for
+    
+    restoreColors
+end function
+
+//----------------------------------------------------------------------
+// Set value programmatically
+Meter.set = function(newValue)
+    self.value = newValue
+    self.draw
+end function
+//---------------------------------------------------------------------- 
 
 //----------------------------------------------------------------------
 
@@ -414,62 +566,94 @@ runEventLoop = function(eventLoop = null)
 end function
 
 demo = function
-	clear
-	textUtil.printAt 39, 23, "TextControl:"
-	outer.box = TextControl.make(40, 49, 18, 22)
-	box.start
-	box.fill
-	box.onMouseOver = function
-		text.color = color.white
-		self.fill
-		text.color = color.orange
-	end function
-	box.onMouseExit = function
-		text.color = color.orange
-		self.fill
-	end function
-	
-	box.clearMsgTime = null
-	box.showMessage = function(msg, duration=1)
-		cols = self.width
-		paddedMsg = (" " * (cols - msg.len)/2 + msg + " " * cols)[:cols]
-		textUtil.printAt box.fromCol, box.fromRow - 1, paddedMsg
-		self.clearMsgTime = time + duration
-	end function
-	box.update = function
-		if self.clearMsgTime and time > self.clearMsgTime then
-			self.showMessage ""
-			self.clearMsgTime = null
-		end if
-	end function
-
-	box.onClick = function
-		self.showMessage "Click!"
-	end function
-	
-	outer.quitBtn = Button.make(60, 0, 8, "Exit")
-	quitBtn.action = function; eventLoop.stop; text.row = 25; end function
-	quitBtn.start
-	
-	textUtil.printAt 12, 22, "Switch:"
-	outer.switch = Switch.make(20, 22)
-	switch.action = function(x); textUtil.printAt 25, 22, x; end function
-	switch.start
-	
-	textUtil.printAt 12, 19, "Slider:"
-	outer.slider = Slider.make(13, 18)
-	slider.action = function(x); textUtil.printAt 25, 18, x + " "*8; end function
-	slider.maxValue = 10
-	slider.start
-	
-	outer.btn = Button.make(29, 20, 7, "Reset")
-	btn.start
-	btn.action = function
-		switch.set false
-		slider.set 0
-	end function
-	
-	runEventLoop
+    clear
+    textUtil.printAt 39, 23, "TextControl:"
+    outer.box = TextControl.make(40, 49, 18, 22)
+    box.start
+    box.fill
+    box.onMouseOver = function
+        text.color = color.white
+        self.fill
+        text.color = color.orange
+    end function
+    box.onMouseExit = function
+        text.color = color.orange
+        self.fill
+    end function
+    
+    box.clearMsgTime = null
+    box.showMessage = function(msg, duration=1)
+        cols = self.width
+        paddedMsg = (" " * (cols - msg.len)/2 + msg + " " * cols)[:cols]
+        textUtil.printAt box.fromCol, box.fromRow - 1, paddedMsg
+        self.clearMsgTime = time + duration
+    end function
+    box.update = function
+        if self.clearMsgTime and time > self.clearMsgTime then
+            self.showMessage ""
+            self.clearMsgTime = null
+        end if
+    end function
+    box.onClick = function
+        self.showMessage "Click!"
+    end function
+    
+    // Exit button
+    outer.quitBtn = Button.make(60, 0, 8, "Exit")
+    quitBtn.action = function; eventLoop.stop; text.row = 25; end function
+    quitBtn.start
+    
+    // Switch
+    textUtil.printAt 12, 22, "Switch:"
+    outer.switch = Switch.make(20, 22)
+    switch.action = function(x); textUtil.printAt 25, 22, x; end function
+    switch.start
+    
+    // Slider
+    textUtil.printAt 12, 19, "Slider:"
+    outer.slider = Slider.make(13, 18)
+    slider.maxValue = 100
+    slider.start
+    
+    // Meters
+    textUtil.printAt 12, 16, "Meters:"
+    
+    outer.hpMeter = Meter.make(13, 15, 14, "HP")
+    hpMeter.minValue = 0
+    hpMeter.maxValue = 100
+    hpMeter.fillColor = color.red
+    hpMeter.start
+    
+    outer.mpMeter = Meter.make(13, 14, 14, "MP")
+    mpMeter.minValue = 0
+    mpMeter.maxValue = 100
+    mpMeter.fillColor = color.blue
+    mpMeter.start
+    
+    outer.staminaMeter = Meter.make(13, 13, 14, "STA")
+	staminaMeter.showPercent = true
+    staminaMeter.minValue = 0
+    staminaMeter.maxValue = 100
+    staminaMeter.fillColor = color.orange
+    staminaMeter.start
+    
+    // Bind slider to meters
+    slider.action = function(x)
+        hpMeter.set x
+        mpMeter.set x * 0.75
+        staminaMeter.set x * 0.5
+        textUtil.printAt 25, 18, x + " "*8
+    end function
+    
+    // Reset button
+    outer.btn = Button.make(29, 20, 7, "Reset")
+    btn.start
+    btn.action = function
+        switch.set false
+        slider.set 0
+    end function
+    
+    runEventLoop
 end function
 
 if locals == globals then demo
